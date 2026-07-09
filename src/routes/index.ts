@@ -1,5 +1,6 @@
 import { Router } from "express";
 import coursesRoutes from "../modules/courses/courses.module";
+import syllabusRoutes from "../modules/courses/syllabus.module";
 import levelsRoutes from "../modules/levels/levels.module";
 import modulesRoutes from "../modules/modules/modules.module";
 import topicsRoutes from "../modules/topics/topics.module";
@@ -21,6 +22,7 @@ import assessmentsRoutes from "../modules/assessments/assessments.module";
  */
 const apiRouter = Router();
 
+apiRouter.use("/courses", syllabusRoutes);
 apiRouter.use("/courses", coursesRoutes);
 apiRouter.use("/levels", levelsRoutes);
 apiRouter.use("/modules", modulesRoutes);

@@ -9,13 +9,16 @@
  * upsert, so it's safe to re-run while Firestore is still the live fallback
  * for anything not yet cut over to backend-primary.
  *
- * Explicitly out of scope: the `syllabi` collection (see migration plan).
+ * Syllabus content is the one exception to "upsert": a course that already
+ * has rows in Postgres (currently `ttp`, hand-entered independently of
+ * Firestore) is left untouched rather than overwritten — see migrateSyllabi().
  */
 import { randomUUID } from "crypto";
 import { cert, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { closePool, pool } from "../db/pool";
 import { withTransaction } from "../db/transaction";
+import { IncomingLevel, replaceCourseSyllabus } from "../modules/courses/syllabus.module";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -207,6 +210,51 @@ async function migrateAssessments(db: FirebaseFirestore.Firestore): Promise<numb
   return count;
 }
 
+type SyllabusDoc = {
+  id?: string;
+  name?: string;
+  sub?: string;
+  icon?: string;
+  levels?: unknown;
+};
+
+async function migrateSyllabi(db: FirebaseFirestore.Firestore): Promise<{ migrated: number; skipped: number }> {
+  const snapshot = await db.collection("syllabi").get();
+  let migrated = 0;
+  let skipped = 0;
+
+  for (const doc of snapshot.docs) {
+    const data = doc.data() as SyllabusDoc;
+    const courseId = data.id || doc.id;
+
+    if (!Array.isArray(data.levels)) {
+      console.warn(`[migrate-from-firestore] Skipping syllabus '${courseId}': no levels[] array.`);
+      continue;
+    }
+
+    const existing = await pool.query(`SELECT 1 FROM levels WHERE course_id = $1 LIMIT 1`, [courseId]);
+    if (existing.rows.length > 0) {
+      console.warn(
+        `[migrate-from-firestore] Skipping syllabus '${courseId}': already has Postgres content — not overwriting.`
+      );
+      skipped++;
+      continue;
+    }
+
+    await withTransaction((client) =>
+      replaceCourseSyllabus(client, courseId, {
+        name: data.name,
+        sub: data.sub,
+        icon: data.icon,
+        levels: data.levels as IncomingLevel[],
+      })
+    );
+    migrated++;
+  }
+
+  return { migrated, skipped };
+}
+
 async function main(): Promise<void> {
   const db = getDb();
 
@@ -219,7 +267,12 @@ async function main(): Promise<void> {
   const assessmentCount = await migrateAssessments(db);
   console.log(`[migrate-from-firestore] Migrated ${assessmentCount} assessment(s) (+ questions).`);
 
-  console.log("[migrate-from-firestore] Done. (Skipped `syllabi` — out of scope, see migration plan.)");
+  const syllabusResult = await migrateSyllabi(db);
+  console.log(
+    `[migrate-from-firestore] Migrated ${syllabusResult.migrated} syllabus/syllabi (${syllabusResult.skipped} skipped — already had Postgres content).`
+  );
+
+  console.log("[migrate-from-firestore] Done.");
 }
 
 main()
