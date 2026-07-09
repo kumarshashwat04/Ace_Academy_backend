@@ -6,6 +6,7 @@ import { checkConnection } from "./db/pool";
 import apiRouter from "./routes";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFound } from "./middleware/notFound";
+import { requireInternalKey } from "./middleware/requireInternalKey";
 import { asyncHandler } from "./core/asyncHandler";
 
 /**
@@ -34,7 +35,7 @@ export function createApp(): Application {
     })
   );
 
-  app.use("/api", apiRouter);
+  app.use("/api", requireInternalKey, apiRouter);
 
   app.use(notFound);
   app.use(errorHandler);

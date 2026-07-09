@@ -18,6 +18,10 @@ export class ApiError extends Error {
     return new ApiError(400, message, details);
   }
 
+  static unauthorized(message = "Unauthorized"): ApiError {
+    return new ApiError(401, message);
+  }
+
   static notFound(message = "Resource not found"): ApiError {
     return new ApiError(404, message);
   }

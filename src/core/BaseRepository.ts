@@ -194,4 +194,90 @@ export class BaseRepository<T extends QueryResultRow = QueryResultRow> {
     );
     return rows.length > 0 ? rows[0] : null;
   }
+
+  /** Builds "col1", "col2", ... / $1, $2, ... pairs from a data object, validating each column. */
+  private buildColumnValueLists(data: Record<string, unknown>): {
+    columns: string[];
+    placeholders: string[];
+    values: unknown[];
+  } {
+    const columns: string[] = [];
+    const placeholders: string[] = [];
+    const values: unknown[] = [];
+
+    for (const [column, value] of Object.entries(data)) {
+      values.push(value);
+      columns.push(this.quoteIdentifier(column));
+      placeholders.push(`$${values.length}`);
+    }
+
+    return { columns, placeholders, values };
+  }
+
+  /** Inserts a row. Returns the inserted row. */
+  async insert(data: Record<string, unknown>): Promise<T> {
+    await this.ensureLoaded();
+    if (Object.keys(data).length === 0) {
+      throw ApiError.badRequest("No data provided to insert");
+    }
+    const { columns, placeholders, values } = this.buildColumnValueLists(data);
+
+    const rows = await query<T>(
+      `INSERT INTO "${this.table}" (${columns.join(", ")})
+       VALUES (${placeholders.join(", ")})
+       RETURNING *`,
+      values
+    );
+    return rows[0];
+  }
+
+  /** Updates a row by primary key. Returns the updated row (null if it doesn't exist). */
+  async update(id: string | number, data: Record<string, unknown>): Promise<T | null> {
+    await this.ensureLoaded();
+    if (Object.keys(data).length === 0) {
+      throw ApiError.badRequest("No data provided to update");
+    }
+    const { columns, placeholders, values } = this.buildColumnValueLists(data);
+    const setClause = columns.map((col, i) => `${col} = ${placeholders[i]}`).join(", ");
+
+    values.push(id);
+    const rows = await query<T>(
+      `UPDATE "${this.table}"
+          SET ${setClause}
+        WHERE ${this.quoteIdentifier(this.primaryKey)} = $${values.length}
+      RETURNING *`,
+      values
+    );
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  /** Inserts a row, or updates it on primary-key conflict. Returns the resulting row. */
+  async upsert(data: Record<string, unknown>): Promise<T> {
+    await this.ensureLoaded();
+    const { columns, placeholders, values } = this.buildColumnValueLists(data);
+    const pk = this.quoteIdentifier(this.primaryKey);
+    const updateClause = columns
+      .filter((col) => col !== pk)
+      .map((col) => `${col} = EXCLUDED.${col}`)
+      .join(", ");
+
+    const rows = await query<T>(
+      `INSERT INTO "${this.table}" (${columns.join(", ")})
+       VALUES (${placeholders.join(", ")})
+       ON CONFLICT (${pk}) DO UPDATE SET ${updateClause}
+       RETURNING *`,
+      values
+    );
+    return rows[0];
+  }
+
+  /** Deletes a row by primary key. Returns true if a row was deleted. */
+  async remove(id: string | number): Promise<boolean> {
+    await this.ensureLoaded();
+    const rows = await query(
+      `DELETE FROM "${this.table}" WHERE ${this.quoteIdentifier(this.primaryKey)} = $1 RETURNING ${this.quoteIdentifier(this.primaryKey)}`,
+      [id]
+    );
+    return rows.length > 0;
+  }
 }

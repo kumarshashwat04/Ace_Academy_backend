@@ -8,7 +8,15 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "introspect": "tsx src/scripts/introspect.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "migrate": "tsx src/scripts/migrate.ts",
+    "migrate-from-firestore": "tsx src/scripts/migrate-from-firestore.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop ace-academy-api",
+    "pm2:restart": "pm2 restart ace-academy-api",
+    "pm2:logs": "pm2 logs ace-academy-api",
+    "pm2:status": "pm2 status",
+    "pm2:save": "pm2 save"
   },
   "keywords": [
     "ace-academy",
@@ -21,6 +29,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
+    "firebase-admin": "^13.10.0",
     "helmet": "^8.0.0",
     "pg": "^8.13.1"
   },
@@ -29,6 +38,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.5",
     "@types/pg": "^8.11.10",
+    "pm2": "^5.4.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

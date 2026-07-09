@@ -34,6 +34,7 @@ export const config = {
   env: optional("NODE_ENV", "development"),
   port: toNumber(optional("PORT", "3000"), "PORT"),
   corsOrigin: optional("CORS_ORIGIN", "*"),
+  internalApiKey: required("INTERNAL_API_KEY"),
 
   db: {
     host: required("DB_HOST"),
